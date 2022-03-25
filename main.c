@@ -48,6 +48,13 @@ void display_event(void);
 
 void view_log(void);
 
+/*change password*/
+
+void change_psswd(void);
+
+/*downloag log*/
+void download_log(void);
+
 static void init_config(void)
 {
     init_clcd();
@@ -106,6 +113,61 @@ void main(void)
 void display_event(void)
 {
 }
+
+void download_log()
+{
+    for(int i = 0;i < 10;i++ )
+    {
+	puts(storage[i]);
+	putch('\n');
+	putch('\r');
+    }
+}
+
+void change_psswd(void)
+{
+    char key;
+    char pass_count = 0;
+    while(1)
+    {
+	key = read_switches(STATE_CHANGE);
+
+	if(pass_count < 4)
+	{
+	    if(blink_cursor++ < 600 )
+	    {
+		clcd_putch(cursor,LINE2(pass_count));
+	    }
+	    else if (blink_cursor++ < 5000)
+		clcd_putch(' ',LINE2(pass_count));
+	    else
+		blink_cursor = 0;
+
+	    if(key == MK_SW11)
+	    {
+		write_internal_eeprom(pass_count, '1');
+		pass_count++;
+
+	    }
+	    else if (key == MK_SW12)
+	    {
+		write_internal_eeprom(pass_count, '0');
+		pass_count++;
+
+	    }
+
+
+
+
+	}
+	else
+	    return;
+
+    }
+
+
+}
+
 
 
 void store_event(char time[],char current_event[],char speed[])
