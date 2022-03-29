@@ -15,7 +15,7 @@ void current_speed(void);
 char speed[3];
 
 /*Event(gear) related variables*/
-char gear_state[6][3] = {"ON","GN","G1","G2","G3","G4"};
+char gear_state[9][3] = {"ON","GN","G1","G2","G3","G4","CL","CP","DL"};
 void event(char *gear_shift_key);
 unsigned char event_count = 0;
 
@@ -49,12 +49,14 @@ void display_event(void);
 void view_log(void);
 
 /*change password*/
-
 void change_psswd(void);
 
 /*downloag log*/
 void download_log(void);
 
+
+/*claer log*/
+void clear_log(void);
 static void init_config(void)
 {
     init_clcd();
@@ -76,7 +78,7 @@ void main(void)
     unsigned char key_pressed = 0;
     unsigned char menu_key_flag = 0;
 
-
+RB0 = 0;
 
     while (1)
     {
@@ -91,13 +93,15 @@ void main(void)
 	    get_time();
 	    display_time();
 
+
+	    /*diplaying the speed*/
+	    current_speed();
+
 	    /*displaying the event*/
 	    event(&key_pressed);
 	    clcd_print(gear_state[event_count],LINE2(10));
 
-	    /*diplaying the speed*/
-	    current_speed();
-	    display_event();
+
 
 	    /*Menu options*/
 	    if((key_pressed = read_switches(STATE_CHANGE)) == MK_SW11)
@@ -110,24 +114,79 @@ void main(void)
 
 }
 
-void display_event(void)
+void set_time()
 {
+
+    typedef struct 
+    {
+	unsigned char dummy;
+	    union
+	    {
+		lower
+	    }nibble;
+    }nibbles;
+    clcd_print("                          ",LINE1(0));
+
+    unsigned char min_dummy;
+   
+    /* Setting the CH bit of the RTC to Stop the Clock */
+	dummy = read_ds1307(SEC_ADDR);
+	write_ds1307(SEC_ADDR, dummy | 0x80);
+
+
+	/*setting minute*/
+	min_dummy = read_ds1307(MIN_ADDR);
+
+
+
+
+
+	write_ds1307(MIN_ADDR,   0x00);
+
+	/* Seting 12 Hr Format */
+	dummy = read_ds1307(HOUR_ADDR);
+	write_ds1307(HOUR_ADDR,   0x00);
+
+	
+}
+
+void clear_log(void)
+{
+    for(int i = 0;i < 10;i++)
+    {
+	storage[i][0] = '\0';
+    }
+    clcd_print("   LOG CLEARED  ",LINE1(0));
+    clcd_print("                ",LINE2(0));
+    storage_index = 0;
+    store_event(time,gear_state[6],speed);
+    for(int i = 1000;i--;);
 }
 
 void download_log()
 {
+    clcd_print(" LOG DOWNOALED ",LINE1(0));
     for(int i = 0;i < 10;i++ )
     {
+	if(storage[i][0] == '\0')
+	    puts("empty");
+	else
 	puts(storage[i]);
 	putch('\n');
 	putch('\r');
     }
+    for(long int i = 70000;i--;);
+    store_event(time,gear_state[8],speed);
 }
 
 void change_psswd(void)
 {
     char key;
     char pass_count = 0;
+
+    store_event(time,gear_state[7],speed);
+    clcd_print("TYPE NEW PASSWORD",LINE1(0));
+    clcd_print("                  ",LINE2(0));
     while(1)
     {
 	key = read_switches(STATE_CHANGE);
@@ -173,7 +232,6 @@ void change_psswd(void)
 void store_event(char time[],char current_event[],char speed[])
 {
     int count = 0;
-
 
 
     for(int i = 0;time[i] != '\0';i++)
@@ -251,7 +309,7 @@ void view_log(void)
 	key = read_switches(STATE_CHANGE);
 	if(back_key_delay-- == 0)
 	{
-	    back_key_delay = 500;
+	    back_key_delay = 5000;
 	    /*back to previous menu if mk 12 is long pressed*/
 	    if(back_key == MK_SW12)
 		return;
@@ -289,6 +347,8 @@ void menu_key_operation(char* menu_key)
     char menu_key_long_press;
     long int menu_key_long_press_delay = 70000;
 
+    int flag = 0;
+
     {
 	while(1)
 	{
@@ -296,26 +356,56 @@ void menu_key_operation(char* menu_key)
 	    *menu_key = read_switches(STATE_CHANGE);
 	    menu_key_long_press = read_switches(LEVEL_CHANGE);
 
-	    /*Long press logic for going forward and backward in menu*/
-	    if(menu_index == 1 && menu_key_long_press == MK_SW11)
-	    {
 
-		if(menu_key_long_press_delay-- == 0)
-		{
-		    menu_key_long_press_delay = 70000;
-		    if((menu_key_long_press == MK_SW11))
+	    switch(menu_key_long_press)
+	    {
+		case MK_SW11:
 		    {
-			view_log();
-			menu_index = 1;
+			if(menu_key_long_press_delay-- == 0)
+			{
+			    menu_key_long_press_delay = 70000;
+			    if(menu_scroll == 0)
+			    {
+				view_log();
+			    }
+			    else if(menu_scroll == 1)
+			    {
+				clear_log();
+
+			    }
+			    else if(menu_scroll == 2)
+			    {
+				/*
+
+				//set_time();
+				*/
+			    }
+			    else if(menu_scroll == 3)
+			    {
+				change_psswd();
+			    }
+			    if(menu_scroll == 4)
+			    {
+				download_log();
+			    clcd_print(menu_log[menu_scroll - 1],LINE1(0));
+			    }
+			}
+		    break;
 		    }
-		    else if(menu_key_long_press == MK_SW12)
+		case MK_SW12:
 		    {
-			clcd_print("                              ",LINE2(0));
-			menu_index = 0;
-			return;
+			if(menu_key_long_press_delay-- == 0)
+			{
+			    menu_key_long_press_delay = 70000;
+			    menu_index = 0;
+			    clcd_print("                          ",LINE1(0));
+			    clcd_print("                          ",LINE2(0));
+			    return;
+			}
+			break;
 		    }
-		}
 	    }
+
 
 	    /*Logic for scroling the menu with edge trigering*/
 	    switch(*menu_key)
@@ -396,8 +486,14 @@ Status password_check(void)
     unsigned char attempt = 4;
     unsigned char flag;
     unsigned int delay =  0;
-    clcd_print(" ENTER PASSWORD ",LINE1(0));
-    clcd_print("                       ",LINE2(0));
+
+		clcd_print(" ENTER PASSWORD ",LINE1(0));
+		clcd_print("                ",LINE2(0));
+
+    for(int i = 0;i < 4;i++)
+    {
+	password[i] = read_internal_eeprom(i);	
+    }
 
     while(1)
     {
