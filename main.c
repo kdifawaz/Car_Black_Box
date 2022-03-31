@@ -15,7 +15,7 @@ void current_speed(void);
 char speed[3];
 
 /*Event(gear) related variables*/
-char gear_state[9][3] = {"ON","GN","G1","G2","G3","G4","CL","CP","DL"};
+char gear_state[11][3] = {"ON","GN","G1","G2","G3","G4","CL","CP","DL","ST","CO"};
 void event(char *gear_shift_key);
 unsigned char event_count = 0;
 
@@ -57,6 +57,16 @@ void download_log(void);
 
 /*claer log*/
 void clear_log(void);
+
+
+/*set time*/
+void set_time();
+
+
+
+
+
+
 static void init_config(void)
 {
     init_clcd();
@@ -67,6 +77,10 @@ static void init_config(void)
     init_ds1307();
 
 
+    write_internal_eeprom(0, '0');
+    write_internal_eeprom(1, '0');
+    write_internal_eeprom(2, '0');
+    write_internal_eeprom(3, '0');
     //testing 
 }
 
@@ -78,7 +92,7 @@ void main(void)
     unsigned char key_pressed = 0;
     unsigned char menu_key_flag = 0;
 
-RB0 = 0;
+    RB0 = 0;
 
     while (1)
     {
@@ -87,6 +101,7 @@ RB0 = 0;
 	clcd_print("  TIME   EVNT SP",LINE1(0));
 	while (1)
 	{
+
 
 	    clcd_print("  TIME   EVNT SP",LINE1(0));
 	    /*displaying real time*/
@@ -100,7 +115,6 @@ RB0 = 0;
 	    /*displaying the event*/
 	    event(&key_pressed);
 	    clcd_print(gear_state[event_count],LINE2(10));
-
 
 
 	    /*Menu options*/
@@ -117,37 +131,173 @@ RB0 = 0;
 void set_time()
 {
 
-    typedef struct 
+    unsigned char dummy;
+    union
     {
 	unsigned char dummy;
-	    union
-	    {
-		lower
-	    }nibble;
+	struct
+	{
+	    char lower 	: 4;
+	    char higher 	: 4;
+
+	}nibble;
     }nibbles;
+
     clcd_print("                          ",LINE1(0));
+    clcd_print("  CHANGE TIME  ",LINE1(0));
 
-    unsigned char min_dummy;
-   
+    clcd_print("                          ",LINE2(0));
+    clcd_print(time,LINE2(0));
+
     /* Setting the CH bit of the RTC to Stop the Clock */
-	dummy = read_ds1307(SEC_ADDR);
-	write_ds1307(SEC_ADDR, dummy | 0x80);
+    dummy = read_ds1307(SEC_ADDR);
+    write_ds1307(SEC_ADDR, dummy | 0x80);
 
 
-	/*setting minute*/
-	min_dummy = read_ds1307(MIN_ADDR);
+    /////////////////////////////////////////////////////////////
+    nibbles.dummy = read_ds1307(HOUR_ADDR);
 
 
+    unsigned char increment_key;
+    unsigned char swap_key;
+    unsigned char swap_flag = 0;
+
+    unsigned char min = 0;
+    unsigned char hour = 0;
+    while(1)
+    {
+	increment_key = read_switches(STATE_CHANGE);
+	swap_key = read_switches(STATE_CHANGE);
+
+	if(swap_key == MK_SW6)
+	    break;
+	if(swap_key == MK_SW5)
+	{
+	    swap_flag = !swap_flag;
+
+	    /*selecting the time field*/
+	    if(swap_flag == 0)
+		nibbles.dummy = read_ds1307(HOUR_ADDR);
+	    else if(swap_flag == 1)
+		nibbles.dummy = read_ds1307(MIN_ADDR);
+
+	}
+
+	if(swap_flag == 1)
+	{
+	    switch(increment_key)
+	    {
+		case MK_SW4:
+		    {
+			if(nibbles.nibble.lower < 9)
+			    nibbles.nibble.lower++;
+			else if(nibbles.nibble.lower == 9)
+			{
+			    if(nibbles.nibble.higher >= 0 && nibbles.nibble.higher < 5)
+			    {
+				nibbles.nibble.higher++;
+				nibbles.nibble.lower = 0;
+			    }
+
+			}
+			if(nibbles.nibble.lower == 9 && nibbles.nibble.higher == 5)
+			{
+			    nibbles.dummy = 0;
+			}
+			break;
+
+		    }
+	    }
 
 
+	    if(blink_cursor++ < 1000 )
+	    {
+		clcd_putch('0' + nibbles.nibble.higher,LINE2(3));
+		clcd_putch('0' + nibbles.nibble.lower,LINE2(4));
+	    }
+	    else if (blink_cursor++ < 2000)
+	    {
+		clcd_putch(' ',LINE2(3));
+		clcd_putch(' ',LINE2(4));
+	    }
+	    else
+		blink_cursor = 0;
 
-	write_ds1307(MIN_ADDR,   0x00);
 
-	/* Seting 12 Hr Format */
-	dummy = read_ds1307(HOUR_ADDR);
-	write_ds1307(HOUR_ADDR,   0x00);
+	    clcd_putch('0' + nibbles.nibble.higher,LINE2(3));
+	    clcd_putch('0' + nibbles.nibble.lower,LINE2(4));
+	    min = 0;
+	    min = min | nibbles.nibble.higher;
+	    min = (min << 4) | nibbles.nibble.lower;
+	    write_ds1307(MIN_ADDR,min);
+	}
+	else if(swap_flag == 0)
+	{
+	    if ( increment_key == MK_SW4 )
+	    {
+		if(nibbles.nibble.higher == 2)
+		{
+		    if(nibbles.nibble.lower >= 4)
+		    {
+			nibbles.nibble.lower++;
+			break;
 
-	
+		    }
+		}
+		if(nibbles.nibble.lower < 9 && nibbles.nibble.higher < 2)
+		{
+		    nibbles.nibble.lower++;
+
+		}
+		else if(nibbles.nibble.lower == 9)
+		{
+		    if(nibbles.nibble.higher < 2)
+		    {
+			nibbles.nibble.higher++;
+			nibbles.nibble.lower = 0;
+		    }
+
+		}
+		if(nibbles.nibble.higher == 2 && nibbles.nibble.lower == 3)
+		    nibbles.dummy = 0;
+
+
+	    }
+	    if(blink_cursor++ < 1000 )
+	    {
+		clcd_putch('0' + nibbles.nibble.higher,LINE2(0));
+		clcd_putch('0' + nibbles.nibble.lower,LINE2(1));
+	    }
+	    else if (blink_cursor++ < 2000)
+	    {
+		clcd_putch(' ',LINE2(0));
+		clcd_putch(' ',LINE2(1));
+	    }
+	    else
+		blink_cursor = 0;
+
+
+	    clcd_putch('0' + nibbles.nibble.higher,LINE2(0));
+	    clcd_putch('0' + nibbles.nibble.lower,LINE2(1));
+	    hour=0;
+
+	    hour = nibbles.nibble.higher;
+	    hour = (hour << 4) | nibbles.nibble.lower;
+	    write_ds1307(HOUR_ADDR,hour);
+
+	}
+
+    }
+
+
+    write_ds1307(MIN_ADDR,min);
+    write_ds1307(HOUR_ADDR,hour);
+
+    store_event(time,gear_state[9],speed);
+    /* Clearing the CH bit of the RTC to Start the Clock */
+    dummy = read_ds1307(SEC_ADDR);
+    write_ds1307(SEC_ADDR, dummy & 0x7F); 
+
 }
 
 void clear_log(void)
@@ -171,7 +321,7 @@ void download_log()
 	if(storage[i][0] == '\0')
 	    puts("empty");
 	else
-	puts(storage[i]);
+	    puts(storage[i]);
 	putch('\n');
 	putch('\r');
     }
@@ -266,7 +416,7 @@ void event(char *gear_shift_key)
 		if(event_count < 5)
 		{
 		    event_count = event_count + 1;
-	store_event(time,gear_state[event_count],speed);
+		    store_event(time,gear_state[event_count],speed);
 		}
 		break;
 	    }
@@ -276,8 +426,13 @@ void event(char *gear_shift_key)
 		if(event_count > 0)
 		{
 		    event_count = event_count - 1;
-	store_event(time,gear_state[event_count],speed);
+		    store_event(time,gear_state[event_count],speed);
 		}
+		break;
+	    }
+	case MK_SW1:
+	    {
+		store_event(time,gear_state[10],speed);
 		break;
 	    }
     }
@@ -299,7 +454,7 @@ void view_log(void)
     clcd_print("LOGs",LINE1(6));
     clcd_print("                                      ",LINE2(0));
     clcd_print(storage[log_count],LINE2(0));
-	    clcd_putch('0' + log_count,LINE2(15));
+    clcd_putch('0' + log_count,LINE2(15));
 
 
     key = MK_SW11;
@@ -375,10 +530,12 @@ void menu_key_operation(char* menu_key)
 			    }
 			    else if(menu_scroll == 2)
 			    {
+				set_time();
+				*menu_key = 11;
 				/*
 
 				//set_time();
-				*/
+				 */
 			    }
 			    else if(menu_scroll == 3)
 			    {
@@ -387,10 +544,10 @@ void menu_key_operation(char* menu_key)
 			    if(menu_scroll == 4)
 			    {
 				download_log();
-			    clcd_print(menu_log[menu_scroll - 1],LINE1(0));
+				clcd_print(menu_log[menu_scroll - 1],LINE1(0));
 			    }
 			}
-		    break;
+			break;
 		    }
 		case MK_SW12:
 		    {
@@ -441,7 +598,7 @@ void menu_key_operation(char* menu_key)
 			}
 
 
-			for(long int i = 7000;i--;);
+			//			for(long int i = 1000;i--;);
 
 
 			break;
@@ -467,7 +624,7 @@ void menu_key_operation(char* menu_key)
 
 			if(menu_index > 1)
 			    menu_index -= 1;
-			for(long int i = 7000;i--;);
+			//			for(long int i = 1000;i--;);
 			break;
 		    }
 
@@ -487,8 +644,8 @@ Status password_check(void)
     unsigned char flag;
     unsigned int delay =  0;
 
-		clcd_print(" ENTER PASSWORD ",LINE1(0));
-		clcd_print("                ",LINE2(0));
+    clcd_print(" ENTER PASSWORD ",LINE1(0));
+    clcd_print("                ",LINE2(0));
 
     for(int i = 0;i < 4;i++)
     {
