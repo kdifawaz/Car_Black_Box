@@ -11,20 +11,16 @@ unsigned char time[9];
 
 
 /*POT(speed) related variables*/
-void current_speed(void);
 char speed[3];
 
 /*Event(gear) related variables*/
 char gear_state[11][3] = {"ON","GN","G1","G2","G3","G4","CL","CP","DL","ST","CO"};
-void event(char *gear_shift_key);
 unsigned char event_count = 0;
 
 
 /*Menu options*/
 
 unsigned char menu_key;
-void menu_key_operation(char* menu_key);
-Status password_check(void);
 char menu_log[5][17] = {"    View Log    ","    Clear Log   ","    Set Time    "," Change Password","  Download Log  "};
 
 /*password*/
@@ -37,34 +33,8 @@ static unsigned int blink_cursor = 0;
 
 /*event storing*/
 
-void store_event(char time[],char current_event[],char speed[]);
 char storage[10][17];
 char storage_index = 0;
-
-/*display event*/
-void display_event(void);
-
-/*view log*/
-
-void view_log(void);
-
-/*change password*/
-void change_psswd(void);
-
-/*downloag log*/
-void download_log(void);
-
-
-/*claer log*/
-void clear_log(void);
-
-
-/*set time*/
-void set_time();
-
-
-
-
 
 
 static void init_config(void)
